@@ -1,6 +1,6 @@
 ---
 title: GRASP Flood Signing Extension
-abbrev: GRASP Flood Signing 
+abbrev: GRASP Flood Signing
 docname: draft-carpenter-anima-grasp-ext-sign-00
 
 # stand_alone: true
@@ -145,7 +145,7 @@ which is therefore excluded from the following signature process.
 The bytestring content of the sign-option is a COSE signature with a detached
 payload, as described in {{RFC8152}}. The payload that is signed is a copy
 of the entire flood-message contents encoded as CBOR {{RFC8949}}, but
-without the sign-option component, and with the loop-count component of the first 
+without the sign-option component, and with the loop-count component of the first
 GRASP objective replaced by zero.
 
 In more detail, a node that sends a signed M_FLOOD proceeds as follows:
@@ -185,7 +185,7 @@ Verification proceeds as follows:
 
 1. Extract the signature bytes from the sign-option and decoding them
 from CBOR, typically using a loads() function. The resulting object is
-the COSE signature with a detached payload. 
+the COSE signature with a detached payload.
 
 2. Make a copy of the received M_FLOOD message
 
@@ -195,7 +195,7 @@ the COSE signature with a detached payload.
 
 5. Re-encode this copy as CBOR, typically using a dumps() function.
 
-6. Insert the result as the 'payload' component of the COSE signature. 
+6. Insert the result as the 'payload' component of the COSE signature.
 
 7. Verify the signature as defined in {{RFC8152}}.
 
@@ -203,7 +203,7 @@ A node that does not support verification of  a signed M_FLOOD message
 **MAY** process the message as normal, ignoring the sign-option, and
 **MAY** log the presence of the extra option.
 
-# Open Issues \[RFC Editor: please remove] 
+# Open Issues \[RFC Editor: please remove]
 
 1. The above describes a "voluntary-to-verify" signature, i.e. nodes that do not support COSE signing can simply ignore the signature. Is this OK, or do we also need a "mandatory-to-verify" version?
 
