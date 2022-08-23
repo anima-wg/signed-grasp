@@ -1,7 +1,7 @@
 ---
 title: GRASP Flood Signing Extension
 abbrev: GRASP Flood Signing
-docname: draft-carpenter-anima-grasp-ext-sign-00
+docname: draft-carpenter-anima-grasp-ext-sign-latest
 
 # stand_alone: true
 
