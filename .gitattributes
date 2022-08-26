@@ -10,6 +10,7 @@
 *.yang text
 *.txt text
 *.mkd text
+*.md text
 *.xml text
 *.sh text
 *.sid text
