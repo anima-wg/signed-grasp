@@ -1,0 +1,492 @@
+
+
+
+
+ANIMA                                                         C. Bormann
+Internet-Draft                                                       TZI
+Updates: 8990 (if approved)                              B. E. Carpenter
+Intended status: Standards Track                       Univ. of Auckland
+Expires: 1 March 2023                                          T. Eckert
+                                                               Futurewei
+                                                           M. Richardson
+                                                               Sandelman
+                                                          28 August 2022
+
+
+                     GRASP Flood Signing Extension
+              draft-carpenter-anima-grasp-ext-sign-latest
+
+Abstract
+
+   This document clarifies how message formats for the GeneRic Autonomic
+   Signaling Protocol (GRASP) defined by RFC 8990 may be updated by
+   adding new options.  It also describes one such option for
+   cryptographically signing an M_FLOOD message.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.  The list of current Internet-
+   Drafts is at https://datatracker.ietf.org/drafts/current/.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This Internet-Draft will expire on 1 March 2023.
+
+Copyright Notice
+
+   Copyright (c) 2022 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+   This document is subject to BCP 78 and the IETF Trust's Legal
+   Provisions Relating to IETF Documents (https://trustee.ietf.org/
+   license-info) in effect on the date of publication of this document.
+   Please review these documents carefully, as they describe your rights
+   and restrictions with respect to this document.  Code Components
+   extracted from this document must include Revised BSD License text as
+   described in Section 4.e of the Trust Legal Provisions and are
+   provided without warranty as described in the Revised BSD License.
+
+Table of Contents
+
+   1.  Introduction
+   2.  Terminology
+   3.  Extensibility of GRASP message formats
+   4.  Format of the GRASP M_FLOOD Signature Option
+   5.  Verification
+   6.  Open Issues [RFC Editor: please remove]
+   7.  Implementation Status [RFC Editor: please remove]
+   8.  Security Considerations
+   9.  Revised CDDL Specification of GRASP
+   10. IANA Considerations
+   11. References
+     11.1.  Normative References
+     11.2.  Informative References
+   Appendix A.  Change Log
+     A.1.  Draft-00
+   Appendix B.  Acknowledgements
+   Authors' Addresses
+
+1.  Introduction
+
+   The GeneRic Autonomic Signaling Protocol (GRASP) is specified in
+   [RFC8990].  For the general model of an autonomic network, and for
+   terminology not otherwise defined here or in RFC 8990, see [RFC8993].
+
+   One important feature of GRASP is its flooding mechanism, the M_FLOOD
+   message, which distributes GRASP objectives (as defined in RFC 8990)
+   to all GRASP nodes within range.  Such messages are sent as
+   multicasts, which unlike GRASP unicast messages, cannot be protected
+   with TLS.  To mitigate any risk of malicious M_FLOOD messages, this
+   document specifies a method of cryptographically signing such
+   messages.
+
+   Preparing this specification revealed a weakness in the way RFC 8990
+   describes extensibility by the addition of new options to GRASP
+   messages.  This document therefore starts by clarifying this aspect
+   of RFC 8990.
+
+2.  Terminology
+
+   The key words "*MUST*", "*MUST NOT*", "*REQUIRED*", "*SHALL*",
+   "*SHALL NOT*", "*SHOULD*", "*SHOULD NOT*", "*RECOMMENDED*", "*NOT
+   RECOMMENDED*", "*MAY*", and "*OPTIONAL*" in this document are to be
+   interpreted as described in BCP 14 [RFC2119] [RFC8174] when, and only
+   when, they appear in all capitals, as shown here.
+
+3.  Extensibility of GRASP message formats
+
+   Although RFC 8990 defines a finite set of GRASP message types and
+   their contents, it also implies that extensions are expected.  In
+   particular, the general definition of the message format
+   (Section 2.8.2 of [RFC8990]) states that:
+
+   |  The MESSAGE_TYPE indicates the type of the message and thus
+   |  defines the expected options.  Any options received that are not
+   |  consistent with the MESSAGE_TYPE SHOULD be silently discarded.
+
+   The general structure of a GRASP message is an integer MESSAGE_TYPE
+   followed by various elements, some of which are options in the form
+   [OPTION_TYPE, ...].  The intention of the quoted statement was to
+   allow new options to be defined without invalidating existing
+   implementations.  However, the formal CDDL definitions in [RFC8610]
+   of the various individual message types do not include explicit
+   extension points where new options could be included.  Thus, the
+   implementer of a message decoder that adheres strictly to the CDDL
+   might not implement the silent discard, because an unexpected option
+   would violate the CDDL definition and trigger a decoding error.  This
+   creates a risk of interoperability failure when new options are
+   introduced.
+
+   This document revises the CDDL definition of GRASP to clarify this
+   point.  Specifically, the CDDL now starts as follows:
+
+   grasp-message = (message .within message-structure) / noop-message
+   message-structure = [MESSAGE_TYPE, session-id, ?initiator,
+                         *grasp-element]
+   grasp-element = (option .within option-structure) / objective / any
+   option-structure = [OPTION_TYPE, *any]
+
+   This allows future extensions to be made by specifying elements in
+   the two "any" components shown.  The complete revised CDDL definition
+   is given in Section 9.  Consistent with RFC 8990, implementations
+   *SHOULD* silently discard unknown options, with *OPTIONAL* logging
+   for diagnostic purposes.
+
+   It is not expected that the basic GRASP message formats and options
+   will require frequent extensions.  In general, extended capabilities
+   *SHOULD* be created by designing suitable GRASP objectives, as
+   defined in Section 2.10 of [RFC8990] and discussed in [RFC9222].
+
+4.  Format of the GRASP M_FLOOD Signature Option
+
+   The formal definition of the GRASP M_FLOOD message is extended as
+   follows, defined in fragmentary CDDL [RFC8610].
+
+   The statement given in [RFC8990]:
+
+       flood-message = [M_FLOOD, session-id, initiator, ttl,
+                    +[objective, (locator-option / [])]]
+
+   is replaced by:
+
+      flood-message = [M_FLOOD, session-id, initiator, ttl,
+                    +[objective, (locator-option / [])], ?sign-option]
+
+      sign-option = [O_COSE_SIGN, bytes] ; see text description
+      O_COSE_SIGN = 107
+
+   Note that signed M_FLOOD messages are relayed exactly as desccribed
+   in Section 2.5.6.2 of [RFC8990], including decrementing the loop
+   count, which is therefore excluded from the following signature
+   process.
+
+   The bytestring content of the sign-option is a COSE signature with a
+   detached payload, as described in [RFC8152].  The payload that is
+   signed is a copy of the entire flood-message contents encoded as CBOR
+   [RFC8949], but without the sign-option component, and with the loop-
+   count component of the first GRASP objective replaced by zero.
+
+   In more detail, a node that sends a signed M_FLOOD proceeds as
+   follows:
+
+   1.  Build the M_FLOOD message with no signature.
+
+   2.  Make a copy of this structure.
+
+   3.  Set the loop-count of the first objective to zero.
+
+   4.  Encode this copy in CBOR to be used as the COSE payload, as
+       described in [RFC8152].
+
+   5.  Create a COSE signature expressed in CBOR with this payload, as
+       described in [RFC8152], using this node's key.
+
+   6.  Decode this signature from CBOR, typically using a loads()
+       function.
+
+   7.  Replace the payload component by nil.
+
+   8.  Re-encode this signature in CBOR, typically using a dumps()
+       function.
+
+   The result is the bytestring to be included in the sign-option.
+
+   The COSE signature uses the following choices according to RFC 8152:
+
+   TBD TBD
+
+   The process by which the relevant COSE keys are generated and
+   distributed is out of scope for the present document.
+
+5.  Verification
+
+   Upon receipt of a signed M_FLOOD message, each GRASP node *SHOULD*
+   verify it with a key related to the node identified by the
+   'initiator' element.  If verification succeeds, the message is
+   processed as normal.  If verification fails, the message *MUST* be
+   ignored and the event *MAY* be logged.
+
+   Verification proceeds as follows:
+
+   1.  Extract the signature bytes from the sign-option and decoding
+       them from CBOR, typically using a loads() function.  The
+       resulting object is the COSE signature with a detached payload.
+
+   2.  Make a copy of the received M_FLOOD message
+
+   3.  Remove the sign-option from that copy.
+
+   4.  Set the loop-count component of the first GRASP objective in that
+       copy to zero.
+
+   5.  Re-encode this copy as CBOR, typically using a dumps() function.
+
+   6.  Insert the result as the 'payload' component of the COSE
+       signature.
+
+   7.  Verify the signature as defined in [RFC8152].
+
+   A node that does not support verification of a signed M_FLOOD message
+   *MAY* process the message as normal, ignoring the sign-option, and
+   *MAY* log the presence of the extra option.
+
+6.  Open Issues [RFC Editor: please remove]
+
+   1.  The above describes a "voluntary-to-verify" signature, i.e. nodes
+       that do not support COSE signing can simply ignore the signature.
+       Is this OK, or do we also need a "mandatory-to-verify" version?
+
+   2.  Is the current arbitrary limitation to 256 option types
+       necessary?
+
+   3.  Should the signature be applied to an objective instead of a
+       whole message?
+
+7.  Implementation Status [RFC Editor: please remove]
+
+   TBD.  Code will be on Github (https://github.com/becarpenter/graspy).
+
+8.  Security Considerations
+
+   The security considerations of [RFC8990] apply.  This document
+   enhances protection against malicious nodes by defining a verifiable
+   COSE signature for flooded objectives.  It does not describe the
+   keying process.
+
+   In a network where only some nodes are capable of verifying the
+   signature of flooded GRASP objectives, the operator must consider
+   which objectives require to be signed, and what is the impact of some
+   nodes using the flooded information without verification.  An
+   operator might choose to disallow nodes that cannot verify such
+   messages.
+
+9.  Revised CDDL Specification of GRASP
+
+   This section replaces Section 4 of [RFC8990].
+
+   <CODE BEGINS>
+   grasp-message = (message .within message-structure) / noop-message
+
+   message-structure = [MESSAGE_TYPE, session-id, ?initiator,
+                        *grasp-element]
+
+   grasp-element = (option .within option-structure) / objective / any
+   option-structure = [OPTION_TYPE, *any]
+
+   MESSAGE_TYPE = 0..255
+   session-id = 0..4294967295 ; up to 32 bits
+   OPTION_TYPE = 0..255
+
+   message /= discovery-message
+   discovery-message = [M_DISCOVERY, session-id, initiator, objective]
+
+   message /= response-message ; response to Discovery
+   response-message = [M_RESPONSE, session-id, initiator, ttl,
+                       (+locator-option // divert-option), ?objective]
+
+   message /= synch-message ; response to Synchronization request
+   synch-message = [M_SYNCH, session-id, objective]
+
+   message /= flood-message
+   flood-message = [M_FLOOD, session-id, initiator, ttl,
+                    +[objective, (locator-option / [])], ?sign-option]
+
+   message /= request-negotiation-message
+   request-negotiation-message = [M_REQ_NEG, session-id, objective]
+
+   message /= request-synchronization-message
+   request-synchronization-message = [M_REQ_SYN, session-id, objective]
+
+   message /= negotiation-message
+   negotiation-message = [M_NEGOTIATE, session-id, objective]
+
+   message /= end-message
+   end-message = [M_END, session-id, accept-option / decline-option]
+
+   message /= wait-message
+   wait-message = [M_WAIT, session-id, waiting-time]
+
+   message /= invalid-message
+   invalid-message = [M_INVALID, session-id, ?any]
+
+   noop-message = [M_NOOP]
+
+   option /= divert-option
+   divert-option = [O_DIVERT, +locator-option]
+
+   option /= accept-option
+   accept-option = [O_ACCEPT]
+
+   option /= decline-option
+   decline-option = [O_DECLINE, ?reason]
+   reason = text  ; optional UTF-8 error message
+
+   waiting-time = 0..4294967295 ; in milliseconds
+   ttl = 0..4294967295 ; in milliseconds
+
+   option /= locator-option
+   locator-option /= [O_IPv4_LOCATOR, ipv4-address,
+                      transport-proto, port-number]
+   ipv4-address = bytes .size 4
+
+   locator-option /= [O_IPv6_LOCATOR, ipv6-address,
+                      transport-proto, port-number]
+   ipv6-address = bytes .size 16
+
+   locator-option /= [O_FQDN_LOCATOR, text, transport-proto,
+                      port-number]
+
+   locator-option /= [O_URI_LOCATOR, text,
+                      transport-proto / null, port-number / null]
+
+   transport-proto = IPPROTO_TCP / IPPROTO_UDP
+   IPPROTO_TCP = 6
+   IPPROTO_UDP = 17
+   port-number = 0..65535
+
+   option /= sign-option
+   sign-option = [O_COSE_SIGN, bytes] ; see "COSE Signature for GRASP"
+
+   initiator = ipv4-address / ipv6-address
+
+   objective-flags = uint .bits objective-flag
+
+   objective-flag = &(
+     F_DISC: 0    ; valid for discovery
+     F_NEG: 1     ; valid for negotiation
+     F_SYNCH: 2   ; valid for synchronization
+     F_NEG_DRY: 3 ; negotiation is a dry run
+   )
+
+   objective = [objective-name, objective-flags,
+                loop-count, ?objective-value]
+
+   objective-name = text ; see section "Format of Objective Options"
+
+   objective-value = any
+
+   loop-count = 0..255
+
+   ; Constants for message types and option types
+
+   M_NOOP = 0
+   M_DISCOVERY = 1
+   M_RESPONSE = 2
+   M_REQ_NEG = 3
+   M_REQ_SYN = 4
+   M_NEGOTIATE = 5
+   M_END = 6
+   M_WAIT = 7
+   M_SYNCH = 8
+   M_FLOOD = 9
+   M_INVALID = 99
+
+   O_DIVERT = 100
+   O_ACCEPT = 101
+   O_DECLINE = 102
+   O_IPv6_LOCATOR = 103
+   O_IPv4_LOCATOR = 104
+   O_FQDN_LOCATOR = 105
+   O_URI_LOCATOR = 106
+   O_COSE_SIGN = 107
+   <CODE ENDS>
+
+10.  IANA Considerations
+
+   IANA is requested to add one entry to the GRASP Messages and Options
+   registry, and update the unassigned values accordingly:
+
+   107       O_COSE_SIGN   [RFCxxxx]
+   108-255   Unassigned
+
+11.  References
+
+11.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/info/rfc2119>.
+
+   [RFC8152]  Schaad, J., "CBOR Object Signing and Encryption (COSE)",
+              RFC 8152, DOI 10.17487/RFC8152, July 2017,
+              <https://www.rfc-editor.org/info/rfc8152>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
+              May 2017, <https://www.rfc-editor.org/info/rfc8174>.
+
+   [RFC8610]  Birkholz, H., Vigano, C., and C. Bormann, "Concise Data
+              Definition Language (CDDL): A Notational Convention to
+              Express Concise Binary Object Representation (CBOR) and
+              JSON Data Structures", RFC 8610, DOI 10.17487/RFC8610,
+              June 2019, <https://www.rfc-editor.org/info/rfc8610>.
+
+   [RFC8949]  Bormann, C. and P. Hoffman, "Concise Binary Object
+              Representation (CBOR)", STD 94, RFC 8949,
+              DOI 10.17487/RFC8949, December 2020,
+              <https://www.rfc-editor.org/info/rfc8949>.
+
+   [RFC8990]  Bormann, C., Carpenter, B., Ed., and B. Liu, Ed., "GeneRic
+              Autonomic Signaling Protocol (GRASP)", RFC 8990,
+              DOI 10.17487/RFC8990, May 2021,
+              <https://www.rfc-editor.org/info/rfc8990>.
+
+11.2.  Informative References
+
+   [RFC8993]  Behringer, M., Ed., Carpenter, B., Eckert, T., Ciavaglia,
+              L., and J. Nobre, "A Reference Model for Autonomic
+              Networking", RFC 8993, DOI 10.17487/RFC8993, May 2021,
+              <https://www.rfc-editor.org/info/rfc8993>.
+
+   [RFC9222]  Carpenter, B. E., Ciavaglia, L., Jiang, S., and P. Peloso,
+              "Guidelines for Autonomic Service Agents", RFC 9222,
+              DOI 10.17487/RFC9222, March 2022,
+              <https://www.rfc-editor.org/info/rfc9222>.
+
+Appendix A.  Change Log
+
+A.1.  Draft-00
+
+   *  Original version
+
+Appendix B.  Acknowledgements
+
+   TBD
+
+Authors' Addresses
+
+   Carsten Bormann
+   TZI
+   Germany
+   Email: cabo@tzi.org
+
+
+   Brian E. Carpenter
+   The University of Auckland
+   School of Computer Science
+   The University of Auckland
+   PB 92019
+   Auckland 1142
+   New Zealand
+   Email: brian.e.carpenter@gmail.com
+
+
+   Toerless Eckert
+   Futurewei
+   United States of America
+   Email: tte@cs.fau.de
+
+
+   Michael Richardson
+   Sandelman
+   Canada
+   Email: mcr@sandelman.ca
