@@ -24,7 +24,7 @@ author:
         name: Carsten Bormann
         org: TZI
         abbrev: TZI
-        postalLine: Germany
+        country: Germany
         email: cabo@tzi.org
 
       -
@@ -32,11 +32,12 @@ author:
         name: Brian E. Carpenter
         org: The University of Auckland
         abbrev: Univ. of Auckland
-        postalLine: School of Computer Science
-        postalLine: The University of Auckland
-        postalLine: PB 92019
-        postalLine: Auckland 1142
-        postalLine: New Zealand
+        postal:
+        - School of Computer Science
+        - The University of Auckland
+        - PB 92019
+        - Auckland 1142
+        country: New Zealand
         email: brian.e.carpenter@gmail.com
 
       -
@@ -44,7 +45,7 @@ author:
         name: Toerless Eckert
         org: Futurewei
         abbrev: Futurewei
-        postalLine: USA
+        country: USA
         email: tte@cs.fau.de
 
       -
@@ -52,7 +53,7 @@ author:
         name: Michael Richardson
         org: Sandelman
         abbrev: Sandelman
-        postalLine: Canada
+        country: Canada
         email: mcr@sandelman.ca
 
 normative:
@@ -208,6 +209,8 @@ A node that does not support verification of  a signed M_FLOOD message
 1. The above describes a "voluntary-to-verify" signature, i.e. nodes that do not support COSE signing can simply ignore the signature. Is this OK, or do we also need a "mandatory-to-verify" version?
 
 2. Is the current arbitrary limitation to 256 option types necessary?
+
+3. Should the signature be applied to an objective instead of a whole message?
 
 # Implementation Status \[RFC Editor: please remove]
 
