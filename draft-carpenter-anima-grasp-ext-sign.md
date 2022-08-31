@@ -59,7 +59,7 @@ author:
 normative:
   RFC8990:
   RFC8610:
-  RFC8152:
+  RFC9052:
   RFC8949:
 
 informative:
@@ -84,6 +84,10 @@ to all GRASP nodes within range. Such messages are sent as multicasts,
 which unlike GRASP unicast messages, cannot be protected
 with TLS. To mitigate any risk of malicious M_FLOOD messages, this document
 specifies a method of cryptographically signing such messages.
+
+This version describes two approaches, one of which should be chosen for
+standardization:
+signing the message as a whole, or signing just the embedded objective(s).
 
 Preparing this specification revealed a weakness in the way RFC 8990
 describes extensibility by the addition of new options to GRASP messages.
@@ -119,6 +123,14 @@ It is not expected that the basic GRASP message formats and options will require
 
 # Format of the GRASP M_FLOOD Signature Option
 
+This section describes how a signature can be attached to a complete
+GRASP M_FLOOD message.
+
+## Signing a message
+
+This section describes how a M_FLOOD message may be signed as a whole,
+covering all the embedded objectives if there are several.
+
 The formal definition of the GRASP M_FLOOD message is extended as follows, defined
 in fragmentary CDDL {{RFC8610}}.
 
@@ -144,7 +156,7 @@ Section 2.5.6.2 of {{RFC8990}}, including decrementing the loop count,
 which is therefore excluded from the following signature process.
 
 The bytestring content of the sign-option is a COSE signature with a detached
-payload, as described in {{RFC8152}}. The payload that is signed is a copy
+payload, as described in {{RFC9052}}. The payload that is signed is a copy
 of the entire flood-message contents encoded as CBOR {{RFC8949}}, but
 without the sign-option component, and with the loop-count component of the first
 GRASP objective replaced by zero.
@@ -157,9 +169,9 @@ In more detail, a node that sends a signed M_FLOOD proceeds as follows:
 
 3. Set the loop-count of the first objective to zero.
 
-5. Encode this copy in CBOR to be used as the COSE payload, as described in {{RFC8152}}.
+5. Encode this copy in CBOR to be used as the COSE payload, as described in {{RFC9052}}.
 
-4. Create a COSE signature expressed in CBOR with this payload, as described in {{RFC8152}}, using this node's key.
+4. Create a COSE signature expressed in CBOR with this payload, as described in {{RFC9052}}, using this node's key.
 
 5. Decode this signature from CBOR, typically using a loads() function.
 
@@ -169,13 +181,13 @@ In more detail, a node that sends a signed M_FLOOD proceeds as follows:
 
 The result is the bytestring to be included in the sign-option.
 
-The COSE signature uses the following choices according to RFC 8152:
+The COSE signature uses the following choices according to RFC 9052:
 
 TBD TBD
 
 The process by which the relevant COSE keys are generated and distributed is out of scope for the present document.
 
-# Verification
+## Verifying a message
 
 Upon receipt of a signed M_FLOOD message, each GRASP node **SHOULD**
 verify it with a key related to the node identified by the 'initiator' element.
@@ -188,7 +200,7 @@ Verification proceeds as follows:
 from CBOR, typically using a loads() function. The resulting object is
 the COSE signature with a detached payload.
 
-2. Make a copy of the received M_FLOOD message
+2. Make a copy of the received M_FLOOD message.
 
 3. Remove the sign-option from that copy.
 
@@ -198,11 +210,37 @@ the COSE signature with a detached payload.
 
 6. Insert the result as the 'payload' component of the COSE signature.
 
-7. Verify the signature as defined in {{RFC8152}}.
+7. Verify the signature as defined in {{RFC9052}}.
 
 A node that does not support verification of  a signed M_FLOOD message
 **MAY** process the message as normal, ignoring the sign-option, and
 **MAY** log the presence of the extra option.
+
+# Format of the GRASP Objective Signature Option
+
+This section describes how a signature can be attached to a single
+GRASP objective. It is primarily intended for use in an M_FLOOD
+message but MAY be used more widely.
+
+The syntax of a GRASP objective is extended to allow an optional
+COSE signature when the objective value is present:
+
+~~~
+objective = [objective-name, objective-flags,
+             loop-count, ?objective-value] /
+            [objective-name, objective-flags,
+             loop-count, objective-value, objective-signature]
+
+objective-signature = bytes ; see "Signing an objective"
+~~~
+
+## Signing an objective
+
+TBD (Similar to above)
+
+## Verifying a signed objective
+
+TBD (Similar to above)
 
 # Open Issues \[RFC Editor: please remove]
 
@@ -210,7 +248,7 @@ A node that does not support verification of  a signed M_FLOOD message
 
 2. Is the current arbitrary limitation to 256 option types necessary?
 
-3. Should the signature be applied to an objective instead of a whole message?
+3. Should the signature be applied to a whole message, or to an individual objective?
 
 # Implementation Status \[RFC Editor: please remove]
 
@@ -228,17 +266,18 @@ This section replaces Section 4 of {{RFC8990}}.
 
 ~~~~
 <CODE BEGINS>
+;This version includes syntax for both signing an M_FLOOD and
+;for signing any objective. It does not include arbitrary message
+;or option extensibility (under study).
+
 grasp-message = (message .within message-structure) / noop-message
 
 message-structure = [MESSAGE_TYPE, session-id, ?initiator,
-                     *grasp-element]
-
-grasp-element = (option .within option-structure) / objective / any
-option-structure = [OPTION_TYPE, *any]
+                     *grasp-option]
 
 MESSAGE_TYPE = 0..255
 session-id = 0..4294967295 ; up to 32 bits
-OPTION_TYPE = 0..255
+grasp-option = any
 
 message /= discovery-message
 discovery-message = [M_DISCOVERY, session-id, initiator, objective]
@@ -274,20 +313,16 @@ invalid-message = [M_INVALID, session-id, ?any]
 
 noop-message = [M_NOOP]
 
-option /= divert-option
 divert-option = [O_DIVERT, +locator-option]
 
-option /= accept-option
 accept-option = [O_ACCEPT]
 
-option /= decline-option
 decline-option = [O_DECLINE, ?reason]
 reason = text  ; optional UTF-8 error message
 
 waiting-time = 0..4294967295 ; in milliseconds
 ttl = 0..4294967295 ; in milliseconds
 
-option /= locator-option
 locator-option /= [O_IPv4_LOCATOR, ipv4-address,
                    transport-proto, port-number]
 ipv4-address = bytes .size 4
@@ -307,8 +342,7 @@ IPPROTO_TCP = 6
 IPPROTO_UDP = 17
 port-number = 0..65535
 
-option /= sign-option
-sign-option = [O_COSE_SIGN, bytes] ; see "COSE Signature for GRASP"
+sign-option = [O_COSE_SIGN, bytes] ; see "Signing a message"
 
 initiator = ipv4-address / ipv6-address
 
@@ -321,12 +355,18 @@ objective-flag = &(
   F_NEG_DRY: 3 ; negotiation is a dry run
 )
 
-objective = [objective-name, objective-flags,
+objective /= [objective-name, objective-flags,
              loop-count, ?objective-value]
+
+objective /= [objective-name, objective-flags,
+             loop-count, objective-value, objective-signature]
 
 objective-name = text ; see section "Format of Objective Options"
 
 objective-value = any
+
+objective-signature = bytes ; see "Signing an objective"
+
 
 loop-count = 0..255
 
