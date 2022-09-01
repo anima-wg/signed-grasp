@@ -68,7 +68,7 @@ informative:
 
 --- abstract
 
-This document clarifies how message formats for the GeneRic Autonomic Signaling Protocol (GRASP) defined by RFC 8990 may be updated by adding new options. It also describes one such option for cryptographically signing an M_FLOOD message.
+This document clarifies how message formats for the GeneRic Autonomic Signaling Protocol (GRASP) defined by RFC 8990 may be updated by adding new options. It also describes one such option for cryptographically signing an M_FLOOD message, and a method of adding a signature to any GRASP objective.
 
 --- middle
 
